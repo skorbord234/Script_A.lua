@@ -1,4 +1,4 @@
--- [[ UNIVERSAL SCRIPT HUB - FULL RESTORED VERSION ]] --
+-- [[ UNIVERSAL SCRIPT HUB - V10 ]] --
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -25,7 +25,7 @@ Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 50)
 Title.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-Title.Text = "   DEVELOPER SUITE V9"
+Title.Text = "   DEVELOPER SUITE V10"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -151,35 +151,127 @@ end, function()
 end)
 
 -----------------------------------------------------------
--- 3. GHOST
+-- 3. GHOST (UPDATED)
 -----------------------------------------------------------
-local ghostConn, isGhostActive = nil, false
+local ghostActive = false
+local ghostInput, renderAnchor
+local rotX, rotY = 0, 0
+local currentCamPos = Vector3.new(0,0,0)
+
+local function setGhostVisuals(char, isGhost)
+    local transparency = isGhost and 1 or 0
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            if part.Name ~= "HumanoidRootPart" then
+                part.Transparency = transparency
+            end
+        end
+    end
+end
+
 AddScriptButton("Ghost", function()
-    if ghostConn then ghostConn:Disconnect() end
-    ghostConn = UIS.InputBegan:Connect(function(input, gpe)
-        if gpe or input.KeyCode ~= Enum.KeyCode.V then return end
-        isGhostActive = not isGhostActive
-        local lp = game.Players.LocalPlayer
-        local char = lp.Character
-        if isGhostActive then
-            lp.Character.Humanoid.PlatformStand = true
-            workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-            RunService:BindToRenderStep("GhostForce", 2001, function()
-                char.HumanoidRootPart.Velocity = Vector3.zero
-                char.HumanoidRootPart.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position - Vector3.new(0, 500, 0))
-                UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
-            end)
-        else
-            RunService:UnbindFromRenderStep("GhostForce")
-            lp.Character.Humanoid.PlatformStand = false
-            workspace.CurrentCamera.CameraSubject = lp.Character.Humanoid
-            workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-            UIS.MouseBehavior = Enum.MouseBehavior.Default
+    local player = game.Players.LocalPlayer
+    local camera = workspace.CurrentCamera
+    
+    if ghostInput then ghostInput:Disconnect() end
+    
+    ghostInput = UIS.InputBegan:Connect(function(input, proc)
+        if proc then return end
+        if input.KeyCode == Enum.KeyCode.V then
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChild("Humanoid")
+            if not root or not hum then return end
+
+            ghostActive = not ghostActive
+            
+            if ghostActive then
+                if not renderAnchor then
+                    renderAnchor = Instance.new("Part")
+                    renderAnchor.Transparency = 1
+                    renderAnchor.CanCollide = false
+                    renderAnchor.Anchored = true
+                    renderAnchor.Parent = workspace
+                end
+
+                setGhostVisuals(char, true)
+                currentCamPos = camera.CFrame.Position
+                hum.PlatformStand = true
+                
+                local hideLocation = root.Position - Vector3.new(0, 500, 0)
+                root.CFrame = CFrame.new(hideLocation)
+                
+                camera.CameraType = Enum.CameraType.Scriptable
+                camera.CameraSubject = nil 
+                player.ReplicationFocus = renderAnchor
+                
+                local look = camera.CFrame.LookVector
+                rotY = math.atan2(-look.X, -look.Z)
+                rotX = math.asin(look.Y)
+
+                RunService:BindToRenderStep("GhostForce", 2001, function(dt)
+                    root.Velocity = Vector3.zero
+                    root.CFrame = CFrame.new(hideLocation)
+                    UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
+                    
+                    local delta = UIS:GetMouseDelta()
+                    rotY = rotY - (delta.X * 0.75 / 100) 
+                    rotX = rotX - (delta.Y * 0.75 / 100)
+                    rotX = math.clamp(rotX, -math.rad(80), math.rad(80))
+
+                    local rotation = CFrame.Angles(0, rotY, 0) * CFrame.Angles(rotX, 0, 0)
+                    local moveDir = Vector3.zero
+                    if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += Vector3.new(0,0,-1) end
+                    if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir += Vector3.new(0,0,1) end
+                    if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir += Vector3.new(-1,0,0) end
+                    if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += Vector3.new(1,0,0) end
+                    
+                    local vertical = 0
+                    if UIS:IsKeyDown(Enum.KeyCode.Space) then vertical += 1 end
+                    if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then vertical -= 1 end
+
+                    local multiplier = UIS:IsKeyDown(Enum.KeyCode.LeftShift) and 2 or 1
+                    local worldMove = rotation:VectorToWorldSpace(moveDir)
+                    local finalMove = worldMove + Vector3.new(0, vertical, 0)
+                    
+                    if finalMove.Magnitude > 0 then
+                        currentCamPos = currentCamPos + (finalMove.Unit * 50 * multiplier * dt)
+                    end
+                    
+                    renderAnchor.CFrame = CFrame.new(currentCamPos)
+                    camera.CFrame = CFrame.new(currentCamPos) * rotation
+                    camera.Focus = camera.CFrame
+                end)
+            else
+                RunService:UnbindFromRenderStep("GhostForce")
+                player.ReplicationFocus = nil
+                root.CFrame = camera.CFrame
+                camera.CameraSubject = hum
+                camera.CameraType = Enum.CameraType.Custom
+                hum.PlatformStand = false
+                setGhostVisuals(char, false)
+                UIS.MouseBehavior = Enum.MouseBehavior.Default
+            end
         end
     end)
 end, function()
-    if ghostConn then ghostConn:Disconnect() ghostConn = nil end
+    -- CLEAR GHOST
     RunService:UnbindFromRenderStep("GhostForce")
+    if ghostInput then ghostInput:Disconnect() ghostInput = nil end
+    if renderAnchor then renderAnchor:Destroy() renderAnchor = nil end
+    ghostActive = false
+    
+    local char = game.Players.LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then 
+            hum.PlatformStand = false 
+            workspace.CurrentCamera.CameraSubject = hum
+            workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+        end
+        setGhostVisuals(char, false)
+    end
+    UIS.MouseBehavior = Enum.MouseBehavior.Default
 end)
 
 -----------------------------------------------------------
@@ -280,7 +372,7 @@ end, function()
 end)
 
 -----------------------------------------------------------
--- 6. JUMP AND SPEED (SPAWN CENTERED)
+-- 6. JUMP AND SPEED
 -----------------------------------------------------------
 local jsPopUp
 local currentWS = 16
@@ -288,18 +380,13 @@ local currentJP = 50
 
 AddScriptButton("jump and speed", function()
     local player = game.Players.LocalPlayer
-    
-    if jsPopUp then 
-        jsPopUp.Enabled = true 
-        return 
-    end
+    if jsPopUp then jsPopUp.Enabled = true return end
 
     jsPopUp = Instance.new("ScreenGui", player.PlayerGui)
     jsPopUp.Name = "JSPopup"
     jsPopUp.ResetOnSpawn = false
     
     local f = Instance.new("Frame", jsPopUp)
-    -- Position set to {0.5, -110} and {0.5, -80} for perfect center
     f.Size, f.Position, f.BackgroundColor3 = UDim2.new(0,220,0,160), UDim2.new(0.5,-110,0.5,-80), Color3.fromRGB(25,25,25)
     f.Active, f.Draggable = true, true
     Instance.new("UICorner", f)
@@ -342,17 +429,12 @@ AddScriptButton("jump and speed", function()
             player.Character.Humanoid.JumpPower = v 
         end 
     end)
-
 end, function()
     local player = game.Players.LocalPlayer
-    currentWS = 16
-    currentJP = 50
+    currentWS, currentJP = 16, 50
     if player.Character and player.Character:FindFirstChild("Humanoid") then
         player.Character.Humanoid.WalkSpeed = 16
         player.Character.Humanoid.JumpPower = 50
     end
-    if jsPopUp then
-        jsPopUp:Destroy()
-        jsPopUp = nil
-    end
+    if jsPopUp then jsPopUp:Destroy() jsPopUp = nil end
 end)
