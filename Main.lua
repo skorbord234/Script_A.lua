@@ -1,4 +1,4 @@
--- [[ UNIVERSAL SCRIPT HUB - LARGE VERSION ]] --
+-- [[ UNIVERSAL SCRIPT HUB - FULL RESTORED VERSION ]] --
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -183,7 +183,7 @@ end, function()
 end)
 
 -----------------------------------------------------------
--- 4. SNAPPY FLY (B KEY - IMPROVED VERSION)
+-- 4. SNAPPY FLY
 -----------------------------------------------------------
 local flyInputConn, isFlying = nil, false
 local bv, bg, targetVelocity = nil, nil, Vector3.new(0,0,0)
@@ -214,43 +214,25 @@ AddScriptButton("fly", function()
         
         if isFlying and root and hum then
             hum.PlatformStand = true
-            
-            bv = Instance.new("BodyVelocity")
+            bv = Instance.new("BodyVelocity", root)
             bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
             bv.Velocity = Vector3.new(0,0,0)
-            bv.Parent = root
-            
-            bg = Instance.new("BodyGyro")
+            bg = Instance.new("BodyGyro", root)
             bg.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
-            bg.D = 100 -- Lower damping for snappy turning
-            bg.P = 5000 -- Higher power
-            bg.Parent = root
+            bg.D, bg.P = 100, 5000
 
             RunService:BindToRenderStep("SmoothFly", 200, function()
                 if not isFlying or not root then return end
                 bg.CFrame = cam.CFrame
-                
                 local moveDir = Vector3.new(0,0,0)
-                local look = cam.CFrame.LookVector
-                local right = cam.CFrame.RightVector
-                
-                if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += look end
-                if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir -= look end
-                if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir -= right end
-                if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += right end
-                
-                local vert = 0
-                if UIS:IsKeyDown(Enum.KeyCode.Space) then vert = 1
-                elseif UIS:IsKeyDown(Enum.KeyCode.LeftControl) then vert = -1 end
-                
+                if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += cam.CFrame.LookVector end
+                if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir -= cam.CFrame.LookVector end
+                if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir -= cam.CFrame.RightVector end
+                if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += cam.CFrame.RightVector end
+                local vert = UIS:IsKeyDown(Enum.KeyCode.Space) and 1 or (UIS:IsKeyDown(Enum.KeyCode.LeftControl) and -1 or 0)
                 local rawVelocity = (moveDir + Vector3.new(0, vert, 0))
-                if rawVelocity.Magnitude > 0 then
-                    targetVelocity = rawVelocity.Unit * 70
-                else
-                    targetVelocity = Vector3.new(0,0,0)
-                end
-                
-                bv.Velocity = bv.Velocity:Lerp(targetVelocity, 0.4) -- Faster stopping
+                if rawVelocity.Magnitude > 0 then targetVelocity = rawVelocity.Unit * 70 else targetVelocity = Vector3.new(0,0,0) end
+                bv.Velocity = bv.Velocity:Lerp(targetVelocity, 0.4)
             end)
         else
             stopSnappyFly()
@@ -262,7 +244,7 @@ end, function()
 end)
 
 -----------------------------------------------------------
--- 5. NOCLIP (X KEY)
+-- 5. NOCLIP
 -----------------------------------------------------------
 local noclipInputConn, noclipLoopConn, isNoclipActive = nil, nil, false
 
@@ -281,15 +263,11 @@ AddScriptButton("noclip", function()
     noclipInputConn = UIS.InputBegan:Connect(function(input, gpe)
         if gpe or input.KeyCode ~= Enum.KeyCode.X then return end
         isNoclipActive = not isNoclipActive
-        
-        local char = game.Players.LocalPlayer.Character
-        if isNoclipActive and char then
+        if isNoclipActive then
             noclipLoopConn = RunService.Stepped:Connect(function()
-                if not isNoclipActive or not char then return end
-                for _, part in pairs(char:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = false
-                    end
+                if not isNoclipActive or not game.Players.LocalPlayer.Character then return end
+                for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
                 end
             end)
         else
@@ -299,4 +277,82 @@ AddScriptButton("noclip", function()
 end, function()
     if noclipInputConn then noclipInputConn:Disconnect() noclipInputConn = nil end
     stopNoclip()
+end)
+
+-----------------------------------------------------------
+-- 6. JUMP AND SPEED (SPAWN CENTERED)
+-----------------------------------------------------------
+local jsPopUp
+local currentWS = 16
+local currentJP = 50
+
+AddScriptButton("jump and speed", function()
+    local player = game.Players.LocalPlayer
+    
+    if jsPopUp then 
+        jsPopUp.Enabled = true 
+        return 
+    end
+
+    jsPopUp = Instance.new("ScreenGui", player.PlayerGui)
+    jsPopUp.Name = "JSPopup"
+    jsPopUp.ResetOnSpawn = false
+    
+    local f = Instance.new("Frame", jsPopUp)
+    -- Position set to {0.5, -110} and {0.5, -80} for perfect center
+    f.Size, f.Position, f.BackgroundColor3 = UDim2.new(0,220,0,160), UDim2.new(0.5,-110,0.5,-80), Color3.fromRGB(25,25,25)
+    f.Active, f.Draggable = true, true
+    Instance.new("UICorner", f)
+
+    local function createSlider(name, pos, min, max, currentVal, cb)
+        local l = Instance.new("TextLabel", f)
+        l.Size, l.Position, l.Text, l.TextColor3, l.BackgroundTransparency = UDim2.new(1,0,0,20), pos, name..": "..currentVal, Color3.new(1,1,1), 1
+        local b = Instance.new("Frame", f)
+        b.Size, b.Position, b.BackgroundColor3 = UDim2.new(0.8,0,0,6), pos+UDim2.new(0.1,0,0,25), Color3.fromRGB(50,50,50)
+        local s = Instance.new("TextButton", b)
+        s.Size, s.Position, s.BackgroundColor3 = UDim2.new(0,16,0,16), UDim2.new((currentVal-min)/(max-min),-8,0.5,-8), Color3.fromRGB(0,200,255)
+        s.Text = "" Instance.new("UICorner", s).CornerRadius = UDim.new(1,0)
+        
+        local drag = false
+        s.MouseButton1Down:Connect(function() drag = true end)
+        UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end end)
+        
+        RunService.RenderStepped:Connect(function()
+            if drag then
+                local p = math.clamp((UIS:GetMouseLocation().X - b.AbsolutePosition.X)/b.AbsoluteSize.X, 0, 1)
+                s.Position = UDim2.new(p,-8,0.5,-8)
+                local v = math.floor(min + (p*(max-min)))
+                l.Text = name..": "..v 
+                cb(v)
+            end
+        end)
+    end
+
+    createSlider("WalkSpeed", UDim2.new(0,0,0,25), 16, 300, currentWS, function(v) 
+        currentWS = v
+        if player.Character and player.Character:FindFirstChild("Humanoid") then 
+            player.Character.Humanoid.WalkSpeed = v 
+        end 
+    end)
+    
+    createSlider("JumpPower", UDim2.new(0,0,0,85), 50, 600, currentJP, function(v) 
+        currentJP = v
+        if player.Character and player.Character:FindFirstChild("Humanoid") then 
+            player.Character.Humanoid.UseJumpPower = true 
+            player.Character.Humanoid.JumpPower = v 
+        end 
+    end)
+
+end, function()
+    local player = game.Players.LocalPlayer
+    currentWS = 16
+    currentJP = 50
+    if player.Character and player.Character:FindFirstChild("Humanoid") then
+        player.Character.Humanoid.WalkSpeed = 16
+        player.Character.Humanoid.JumpPower = 50
+    end
+    if jsPopUp then
+        jsPopUp:Destroy()
+        jsPopUp = nil
+    end
 end)
