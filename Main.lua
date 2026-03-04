@@ -1,4 +1,4 @@
--- [[ UNIVERSAL SCRIPT HUB - V29 ]] --
+
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -9,15 +9,33 @@ if CoreGui:FindFirstChild("MyScriptHub") then
     CoreGui.MyScriptHub:Destroy()
 end
 
------------------------------------------------------------
--- CUSTOM SMOOTH DRAGGING
------------------------------------------------------------
+
+local Binds = {
+    ["Back TP"] = Enum.UserInputType.MouseButton2,
+    ["jjs"] = Enum.KeyCode.V,
+    ["Ghost"] = Enum.KeyCode.V,
+    ["fly"] = Enum.KeyCode.B,
+    ["noclip"] = Enum.KeyCode.X,
+    ["esp"] = Enum.KeyCode.H,
+    ["aimbot"] = Enum.UserInputType.MouseButton3
+}
+
+local IsListening = false 
+
+local function GetKeyName(action)
+    local bind = Binds[action]
+    if not bind then return "None" end
+    local name = bind.Name or tostring(bind)
+    
+    if name == "MouseButton1" then return "M1" end
+    if name == "MouseButton2" then return "M2" end
+    if name == "MouseButton3" then return "M3" end
+    return name
+end
+
+
 local function MakeSmooth(Frame)
-    local dragging, dragInput, dragStart, startPos
-    local function update(input)
-        local delta = input.Position - dragStart
-        Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
+    local dragging, dragStart, startPos
     Frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
@@ -28,19 +46,15 @@ local function MakeSmooth(Frame)
             end)
         end
     end)
-    Frame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
     UIS.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then update(input) end
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
     end)
 end
 
------------------------------------------------------------
--- MAIN UI SETUP
------------------------------------------------------------
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MyScriptHub"
 ScreenGui.Parent = CoreGui
@@ -58,7 +72,7 @@ MakeSmooth(MainFrame)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 50)
 Title.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-Title.Text = "   DEVELOPER SUITE V29"
+Title.Text = "    DEVELOPER SUITE V29"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
@@ -90,8 +104,10 @@ local function AddScriptButton(name, startFunc, stopFunc)
     Frame.Size = UDim2.new(1, -10, 0, 55)
     Frame.BackgroundTransparency = 1
     Frame.Parent = Container
+
+    local hasBind = Binds[name] ~= nil
     local RunBtn = Instance.new("TextButton")
-    RunBtn.Size = UDim2.new(0.8, -10, 1, 0)
+    RunBtn.Size = hasBind and UDim2.new(0.6, -10, 1, 0) or UDim2.new(0.8, -10, 1, 0)
     RunBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     RunBtn.Text = "Load " .. name
     RunBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
@@ -99,6 +115,41 @@ local function AddScriptButton(name, startFunc, stopFunc)
     RunBtn.TextSize = 16
     RunBtn.Parent = Frame
     Instance.new("UICorner", RunBtn).CornerRadius = UDim.new(0, 6)
+
+    if hasBind then
+        local BindBtn = Instance.new("TextButton")
+        BindBtn.Size = UDim2.new(0.2, -5, 1, 0)
+        BindBtn.Position = UDim2.new(0.6, 0, 0, 0)
+        BindBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        BindBtn.Text = "[" .. GetKeyName(name) .. "]"
+        BindBtn.TextColor3 = Color3.fromRGB(0, 200, 255)
+        BindBtn.Font = Enum.Font.GothamBold
+        BindBtn.TextSize = 12
+        BindBtn.Parent = Frame
+        Instance.new("UICorner", BindBtn).CornerRadius = UDim.new(0, 6)
+
+        BindBtn.MouseButton1Click:Connect(function()
+            if IsListening then return end
+            IsListening = true
+            BindBtn.Text = "..."
+            local tempConn
+            tempConn = UIS.InputBegan:Connect(function(input)
+                local inputType = input.UserInputType
+                if inputType == Enum.UserInputType.Keyboard or 
+                   inputType == Enum.UserInputType.MouseButton1 or 
+                   inputType == Enum.UserInputType.MouseButton2 or 
+                   inputType == Enum.UserInputType.MouseButton3 then
+                    
+                    Binds[name] = (input.KeyCode ~= Enum.KeyCode.Unknown) and input.KeyCode or inputType
+                    BindBtn.Text = "[" .. GetKeyName(name) .. "]"
+                    tempConn:Disconnect()
+                    task.wait(0.1)
+                    IsListening = false
+                end
+            end)
+        end)
+    end
+
     local ClearBtn = Instance.new("TextButton")
     ClearBtn.Size = UDim2.new(0.2, 0, 1, 0)
     ClearBtn.Position = UDim2.new(0.8, 0, 0, 0)
@@ -108,6 +159,7 @@ local function AddScriptButton(name, startFunc, stopFunc)
     ClearBtn.Font = Enum.Font.GothamBold
     ClearBtn.Parent = Frame
     Instance.new("UICorner", ClearBtn).CornerRadius = UDim.new(0, 6)
+
     RunBtn.MouseButton1Click:Connect(function()
         RunBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
         task.spawn(startFunc)
@@ -118,14 +170,14 @@ local function AddScriptButton(name, startFunc, stopFunc)
     end)
 end
 
------------------------------------------------------------
--- 1. BACK TP (R-CLICK)
------------------------------------------------------------
+
 local tpConn
 AddScriptButton("Back TP", function()
     if tpConn then tpConn:Disconnect() end
     tpConn = UIS.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if IsListening then return end
+        local bind = Binds["Back TP"]
+        if not gpe and (input.KeyCode == bind or input.UserInputType == bind) then
             local lp = Players.LocalPlayer
             local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
             if not hrp then return end
@@ -141,14 +193,13 @@ AddScriptButton("Back TP", function()
     end)
 end, function() if tpConn then tpConn:Disconnect() tpConn = nil end end)
 
------------------------------------------------------------
--- 2. JJS (V KEY)
------------------------------------------------------------
+
 local jjsConn
 AddScriptButton("jjs", function()
     if jjsConn then jjsConn:Disconnect() end
     jjsConn = UIS.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.KeyCode == Enum.KeyCode.V then
+        if IsListening then return end
+        if not gpe and input.KeyCode == Binds["jjs"] then
             local hrp = Players.LocalPlayer.Character.HumanoidRootPart
             local start = hrp.CFrame
             local flat = Vector3.new(start.LookVector.X, 0, start.LookVector.Z).Unit
@@ -165,9 +216,7 @@ AddScriptButton("jjs", function()
     end)
 end, function() if jjsConn then jjsConn:Disconnect() jjsConn = nil end end)
 
------------------------------------------------------------
--- 3. GHOST (V KEY)
------------------------------------------------------------
+
 local ghostInp
 AddScriptButton("Ghost", function()
     if ghostInp then ghostInp:Disconnect() end
@@ -240,16 +289,16 @@ AddScriptButton("Ghost", function()
         end
     end
     ghostInp = UIS.InputBegan:Connect(function(input, proc)
-        if not proc and input.KeyCode == Enum.KeyCode.V then toggleGhost() end
+        if IsListening then return end
+        local bind = Binds["Ghost"]
+        if not proc and (input.KeyCode == bind or input.UserInputType == bind) then toggleGhost() end
     end)
 end, function() 
     RunService:UnbindFromRenderStep("GhostForce") 
     if ghostInp then ghostInp:Disconnect() end 
 end)
 
------------------------------------------------------------
--- 4. FLY (B KEY)
------------------------------------------------------------
+
 local flyInp
 AddScriptButton("fly", function()
     if flyInp then flyInp:Disconnect() end
@@ -293,23 +342,25 @@ AddScriptButton("fly", function()
         end
     end
     flyInp = UIS.InputBegan:Connect(function(input, proc)
-        if not proc and input.KeyCode == Enum.KeyCode.B then toggleFly() end
+        if IsListening then return end
+        local bind = Binds["fly"]
+        if not proc and (input.KeyCode == bind or input.UserInputType == bind) then toggleFly() end
     end)
 end, function() 
     RunService:UnbindFromRenderStep("SmoothFly") 
     if flyInp then flyInp:Disconnect() end 
 end)
 
------------------------------------------------------------
--- 5. NOCLIP (X KEY - FIXED)
------------------------------------------------------------
+
 local ncl = false
 local nclInp, nclLoop
 AddScriptButton("noclip", function()
     if nclInp then nclInp:Disconnect() end
     if nclLoop then nclLoop:Disconnect() end
     nclInp = UIS.InputBegan:Connect(function(i, g)
-        if not g and i.KeyCode == Enum.KeyCode.X then 
+        if IsListening then return end
+        local bind = Binds["noclip"]
+        if not g and (i.KeyCode == bind or i.UserInputType == bind) then 
             ncl = not ncl 
             local char = Players.LocalPlayer.Character
             if not ncl and char then
@@ -345,9 +396,7 @@ end, function()
     end
 end)
 
------------------------------------------------------------
--- 6. JUMP AND SPEED
------------------------------------------------------------
+
 local jsGui
 AddScriptButton("jump and speed", function()
     if jsGui then jsGui.Enabled = true return end
@@ -378,14 +427,28 @@ end, function()
     if jsGui then jsGui:Destroy() jsGui = nil end 
 end)
 
------------------------------------------------------------
--- 7. ESP (RAINBOW)
------------------------------------------------------------
-local espOn = false
+
+local espActive = false
+local espInp, espLp
 AddScriptButton("esp", function()
-    espOn = true
-    RunService.RenderStepped:Connect(function()
-        if not espOn then return end
+    if espInp then espInp:Disconnect() end
+    if espLp then espLp:Disconnect() end
+    
+    espInp = UIS.InputBegan:Connect(function(input, proc)
+        if IsListening then return end
+        local bind = Binds["esp"]
+        if not proc and (input.KeyCode == bind or input.UserInputType == bind) then
+            espActive = not espActive
+            if not espActive then
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p.Character and p.Character:FindFirstChild("Glow") then p.Character.Glow:Destroy() end
+                end
+            end
+        end
+    end)
+    
+    espLp = RunService.RenderStepped:Connect(function()
+        if not espActive then return end
         local c = Color3.fromHSV((tick() % 5) / 5, 1, 1)
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= Players.LocalPlayer and p.Character then
@@ -394,18 +457,27 @@ AddScriptButton("esp", function()
             end
         end
     end)
-end, function() espOn = false for _, p in pairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("Glow") then p.Character.Glow:Destroy() end end end)
+end, function() 
+    espActive = false 
+    if espInp then espInp:Disconnect() end 
+    if espLp then espLp:Disconnect() end
+    for _, p in pairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("Glow") then p.Character.Glow:Destroy() end end
+end)
 
------------------------------------------------------------
--- 8. AIMBOT (M3)
------------------------------------------------------------
+
 local abActive, abInp, abLp = false, nil, nil
 AddScriptButton("aimbot", function()
     if abInp then abInp:Disconnect() end
     if abLp then abLp:Disconnect() end
+    
     abInp = UIS.InputBegan:Connect(function(input, proc)
-        if not proc and input.UserInputType == Enum.UserInputType.MouseButton3 then abActive = not abActive end
+        if IsListening then return end
+        local bind = Binds["aimbot"]
+        if not proc and (input.KeyCode == bind or input.UserInputType == bind) then
+            abActive = not abActive
+        end
     end)
+    
     abLp = RunService.RenderStepped:Connect(function()
         if abActive then
             local closest, dist = nil, math.huge
@@ -422,4 +494,8 @@ AddScriptButton("aimbot", function()
             if closest then workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, closest.Character.Head.Position) end
         end
     end)
-end, function() abActive = false if abInp then abInp:Disconnect() end if abLp then abLp:Disconnect() end end)
+end, function() 
+    abActive = false 
+    if abInp then abInp:Disconnect() end 
+    if abLp then abLp:Disconnect() end 
+end)
