@@ -1,4 +1,4 @@
-
+-- [[ UNIVERSAL SCRIPT HUB - V29 - FULL REBINDABLE VERSION ]] --
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
@@ -9,7 +9,9 @@ if CoreGui:FindFirstChild("MyScriptHub") then
     CoreGui.MyScriptHub:Destroy()
 end
 
-
+-----------------------------------------------------------
+-- KEYBIND SYSTEM & GLOBALS
+-----------------------------------------------------------
 local Binds = {
     ["Back TP"] = Enum.UserInputType.MouseButton2,
     ["jjs"] = Enum.KeyCode.V,
@@ -26,14 +28,15 @@ local function GetKeyName(action)
     local bind = Binds[action]
     if not bind then return "None" end
     local name = bind.Name or tostring(bind)
-    
     if name == "MouseButton1" then return "M1" end
     if name == "MouseButton2" then return "M2" end
     if name == "MouseButton3" then return "M3" end
     return name
 end
 
-
+-----------------------------------------------------------
+-- CUSTOM SMOOTH DRAGGING
+-----------------------------------------------------------
 local function MakeSmooth(Frame)
     local dragging, dragStart, startPos
     Frame.InputBegan:Connect(function(input)
@@ -54,7 +57,9 @@ local function MakeSmooth(Frame)
     end)
 end
 
-
+-----------------------------------------------------------
+-- MAIN UI SETUP
+-----------------------------------------------------------
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MyScriptHub"
 ScreenGui.Parent = CoreGui
@@ -170,7 +175,9 @@ local function AddScriptButton(name, startFunc, stopFunc)
     end)
 end
 
-
+-----------------------------------------------------------
+-- 1. BACK TP
+-----------------------------------------------------------
 local tpConn
 AddScriptButton("Back TP", function()
     if tpConn then tpConn:Disconnect() end
@@ -193,30 +200,81 @@ AddScriptButton("Back TP", function()
     end)
 end, function() if tpConn then tpConn:Disconnect() tpConn = nil end end)
 
-
+-----------------------------------------------------------
+-- 2. JJS (LINEAR VELOCITY VERSION)
+-----------------------------------------------------------
 local jjsConn
+local jjsDebounce = false
+
 AddScriptButton("jjs", function()
     if jjsConn then jjsConn:Disconnect() end
-    jjsConn = UIS.InputBegan:Connect(function(input, gpe)
-        if IsListening then return end
-        if not gpe and input.KeyCode == Binds["jjs"] then
-            local hrp = Players.LocalPlayer.Character.HumanoidRootPart
-            local start = hrp.CFrame
-            local flat = Vector3.new(start.LookVector.X, 0, start.LookVector.Z).Unit
-            local info = TweenInfo.new(0.8, Enum.EasingStyle.Sine)
-            TS:Create(hrp, info, {CFrame = start + Vector3.new(0, 120, 0)}):Play() task.wait(0.8)
-            TS:Create(hrp, info, {CFrame = hrp.CFrame + (flat * 450)}):Play() task.wait(0.8)
-            task.wait(2.5)
-            TS:Create(hrp, info, {CFrame = start + Vector3.new(0, 120, 0)}):Play() task.wait(0.8)
-            local ray = workspace:Raycast(hrp.Position, Vector3.new(0, -2000, 0))
-            local gy = ray and ray.Position.Y or start.Position.Y
-            local fin = Vector3.new(start.Position.X, gy + 50, start.Position.Z)
-            TS:Create(hrp, info, {CFrame = CFrame.new(fin, fin + flat)}):Play()
+    
+    local FLY_SPEED, DESCENT_SPEED = 450, 200
+    local UP_DIST, FWD_DIST = 150, 600
+    local HOVER_DUR, LAND_OFFSET = 2.0, 50
+
+    local function setCollisions(state)
+        local char = Players.LocalPlayer.Character
+        if not char then return end
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = state end
+        end
+    end
+
+    local function flyTo(targetPos, lv, speed, hrp)
+        local tolerance = (speed > 200) and 15 or 3
+        while (hrp.Position - targetPos).Magnitude > tolerance do
+            lv.VectorVelocity = (targetPos - hrp.Position).Unit * speed
+            RunService.Heartbeat:Wait()
+        end
+        lv.VectorVelocity = Vector3.new(0, 0, 0)
+    end
+
+    jjsConn = UIS.InputBegan:Connect(function(input, gp)
+        if IsListening or jjsDebounce or gp then return end
+        local bind = Binds["jjs"]
+        if input.KeyCode == bind or input.UserInputType == bind then
+            jjsDebounce = true
+            local char = Players.LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then jjsDebounce = false return end
+
+            local startPos = hrp.Position
+            local flatForward = Vector3.new(hrp.CFrame.LookVector.X, 0, hrp.CFrame.LookVector.Z).Unit
+            
+            setCollisions(false)
+            local attach = Instance.new("Attachment", hrp)
+            local lv = Instance.new("LinearVelocity", attach)
+            lv.MaxForce, lv.VelocityConstraintMode, lv.Attachment0 = 2000000, Enum.VelocityConstraintMode.Vector, attach
+
+            flyTo(startPos + Vector3.new(0, UP_DIST, 0), lv, FLY_SPEED, hrp)
+            flyTo(hrp.Position + (flatForward * FWD_DIST), lv, FLY_SPEED, hrp)
+            task.wait(HOVER_DUR)
+            flyTo(Vector3.new(startPos.X, hrp.Position.Y, startPos.Z), lv, FLY_SPEED, hrp)
+
+            local rayParams = RaycastParams.new()
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+            rayParams.FilterDescendantsInstances = {char, workspace:FindFirstChild("Players") or workspace}
+            local rayResult = workspace:Raycast(Vector3.new(startPos.X, 2000, startPos.Z), Vector3.new(0, -2500, 0), rayParams)
+            
+            local finalY = (rayResult and rayResult.Position.Y or 0) + LAND_OFFSET
+            local finalPos = Vector3.new(startPos.X, finalY, startPos.Z)
+            
+            flyTo(finalPos, lv, DESCENT_SPEED, hrp)
+            hrp.CFrame = CFrame.new(finalPos, finalPos + flatForward)
+            hrp.Velocity = Vector3.zero
+            
+            task.wait(0.1)
+            lv:Destroy() attach:Destroy()
+            setCollisions(true)
+            jjsDebounce = false
         end
     end)
 end, function() if jjsConn then jjsConn:Disconnect() jjsConn = nil end end)
 
-
+-----------------------------------------------------------
+-- 3. GHOST
+-----------------------------------------------------------
 local ghostInp
 AddScriptButton("Ghost", function()
     if ghostInp then ghostInp:Disconnect() end
@@ -298,7 +356,9 @@ end, function()
     if ghostInp then ghostInp:Disconnect() end 
 end)
 
-
+-----------------------------------------------------------
+-- 4. FLY
+-----------------------------------------------------------
 local flyInp
 AddScriptButton("fly", function()
     if flyInp then flyInp:Disconnect() end
@@ -351,7 +411,9 @@ end, function()
     if flyInp then flyInp:Disconnect() end 
 end)
 
-
+-----------------------------------------------------------
+-- 5. NOCLIP
+-----------------------------------------------------------
 local ncl = false
 local nclInp, nclLoop
 AddScriptButton("noclip", function()
@@ -396,7 +458,9 @@ end, function()
     end
 end)
 
-
+-----------------------------------------------------------
+-- 6. JUMP AND SPEED (Slider UI)
+-----------------------------------------------------------
 local jsGui
 AddScriptButton("jump and speed", function()
     if jsGui then jsGui.Enabled = true return end
@@ -427,7 +491,9 @@ end, function()
     if jsGui then jsGui:Destroy() jsGui = nil end 
 end)
 
-
+-----------------------------------------------------------
+-- 7. ESP
+-----------------------------------------------------------
 local espActive = false
 local espInp, espLp
 AddScriptButton("esp", function()
@@ -464,7 +530,9 @@ end, function()
     for _, p in pairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("Glow") then p.Character.Glow:Destroy() end end
 end)
 
-
+-----------------------------------------------------------
+-- 8. AIMBOT
+-----------------------------------------------------------
 local abActive, abInp, abLp = false, nil, nil
 AddScriptButton("aimbot", function()
     if abInp then abInp:Disconnect() end
